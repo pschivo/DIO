@@ -518,6 +518,252 @@ class AttackSimulator:
         logger.info(f"✅ Multi-Vector Attack completed on {target_agent}")
     
     async def simulate_lateral_movement_attack(self):
+        """Simulate lateral movement attack"""
+        logger.info("🔓 Starting Lateral Movement Attack")
+        
+        agents = await self.get_agents()
+        if not agents:
+            logger.error("No agents available for lateral movement simulation")
+            return
+        
+        # Simulate attacker moving from one compromised agent to others
+        compromised_agent = random.choice(agents)['id']
+        target_agents = [agent['id'] for agent in agents if agent['id'] != compromised_agent]
+        
+        logger.info(f"🎯 Compromised agent: {compromised_agent}")
+        logger.info(f"🎯 Target agents: {target_agents}")
+        
+        attack_id = str(uuid.uuid4())
+        
+        # Create initial compromise threat
+        await self.create_threat({
+            'name': f'Lateral Movement - {compromised_agent}',
+            'type': 'lateral_movement',
+            'severity': 'critical',
+            'description': f'Lateral movement detected from {compromised_agent}',
+            'agent_id': compromised_agent
+        })
+        
+        # Simulate lateral movement to each target
+        for i, target_agent in enumerate(target_agents[:3]):  # Limit to 3 targets
+            logger.info(f"🔓 Moving laterally from {compromised_agent} to {target_agent}")
+            
+            # Create evidence of lateral movement attempt
+            await self.create_evidence({
+                'agent_id': target_agent,
+                'type': 'lateral_movement',
+                'severity': 'high',
+                'title': f'Lateral Movement Attempt - {target_agent}',
+                'description': f'Suspicious lateral movement from {compromised_agent} detected',
+                'raw_data': {
+                    'attack_id': attack_id,
+                    'source_agent': compromised_agent,
+                    'attack_vector': 'pass_the_hash',
+                    'timestamp': datetime.now().isoformat()
+                },
+                'confidence': 0.9
+            })
+            
+            # Simulate some metrics on target
+            metrics = {
+                'cpu': random.uniform(60, 85),
+                'memory': random.uniform(50, 75),
+                'disk': random.uniform(30, 50),
+                'network': random.uniform(40, 80),
+                'processes': random.randint(200, 400)
+            }
+            
+            await self.send_agent_metrics(target_agent, metrics)
+            await asyncio.sleep(2)  # Simulate movement time
+        
+        logger.info(f"✅ Lateral Movement Attack completed")
+        return attack_id
+
+    async def simulate_privilege_escalation_attack(self, agent_id: str = None):
+        """Simulate privilege escalation attack"""
+        logger.info(f"🔑 Starting Privilege Escalation Attack on agent {agent_id or 'random'}")
+        
+        agents = await self.get_agents()
+        if not agents:
+            logger.error("No agents available for privilege escalation simulation")
+            return
+        
+        target_agent = agent_id or random.choice(agents)['id']
+        attack_id = str(uuid.uuid4())
+        
+        # Create privilege escalation threat
+        await self.create_threat({
+            'name': f'Privilege Escalation - {target_agent}',
+            'type': 'privilege_escalation',
+            'severity': 'critical',
+            'description': f'Privilege escalation attempt detected on {target_agent}',
+            'agent_id': target_agent
+        })
+        
+        # Simulate escalating privileges with suspicious activity
+        escalation_phases = [
+            {'cpu': random.uniform(70, 95), 'memory': random.uniform(60, 90), 'processes': random.randint(300, 500)},
+            {'cpu': random.uniform(80, 100), 'memory': random.uniform(70, 95), 'processes': random.randint(400, 600)},
+            {'cpu': random.uniform(90, 100), 'memory': random.uniform(80, 100), 'processes': random.randint(500, 700)}
+        ]
+        
+        for i, phase_metrics in enumerate(escalation_phases):
+            logger.info(f"🔑 Escalation phase {i+1} on {target_agent}")
+            
+            await self.create_evidence({
+                'agent_id': target_agent,
+                'type': 'privilege_escalation',
+                'severity': 'critical',
+                'title': f'Privilege Escalation Phase {i+1} - {target_agent}',
+                'description': f'Privilege escalation phase {i+1} with elevated privileges detected',
+                'raw_data': {
+                    'attack_id': attack_id,
+                    'escalation_phase': i + 1,
+                    'privileges_gained': ['admin', 'root', 'system'] if i == 2 else ['user', 'power_user'],
+                    'attack_vector': 'exploit_vulnerability',
+                    'timestamp': datetime.now().isoformat()
+                },
+                'confidence': 0.95
+            })
+            
+            await self.send_agent_metrics(target_agent, phase_metrics)
+            await asyncio.sleep(3)  # Simulate escalation time
+        
+        logger.info(f"✅ Privilege Escalation Attack completed on {target_agent}")
+        return attack_id
+
+    async def simulate_data_exfiltration_attack(self, agent_id: str = None):
+        """Simulate data exfiltration attack"""
+        logger.info(f"💾 Starting Data Exfiltration Attack on agent {agent_id or 'random'}")
+        
+        agents = await self.get_agents()
+        if not agents:
+            logger.error("No agents available for data exfiltration simulation")
+            return
+        
+        target_agent = agent_id or random.choice(agents)['id']
+        attack_id = str(uuid.uuid4())
+        
+        # Create data exfiltration threat
+        await self.create_threat({
+            'name': f'Data Exfiltration - {target_agent}',
+            'type': 'data_exfiltration',
+            'severity': 'critical',
+            'description': f'Data exfiltration detected from {target_agent}',
+            'agent_id': target_agent
+        })
+        
+        # Simulate data theft phases
+        exfiltration_data = [
+            {'size_mb': 50, 'type': 'credentials', 'severity': 'high'},
+            {'size_mb': 200, 'type': 'documents', 'severity': 'critical'},
+            {'size_mb': 500, 'type': 'database', 'severity': 'critical'}
+        ]
+        
+        for i, data in enumerate(exfiltration_data):
+            logger.info(f"💾 Exfiltrating {data['type']} data ({data['size_mb']}MB) from {target_agent}")
+            
+            await self.create_evidence({
+                'agent_id': target_agent,
+                'type': 'data_exfiltration',
+                'severity': 'critical',
+                'title': f'Data Exfiltration - {data["type"]} - {target_agent}',
+                'description': f'Exfiltration of {data["type"]} data ({data["size_mb"]}MB) detected',
+                'raw_data': {
+                    'attack_id': attack_id,
+                    'data_type': data['type'],
+                    'data_size_mb': data['size_mb'],
+                    'exfiltration_method': 'encrypted_channel',
+                    'timestamp': datetime.now().isoformat()
+                },
+                'confidence': 0.98
+            })
+            
+            # Simulate network traffic for exfiltration
+            metrics = {
+                'cpu': random.uniform(40, 70),
+                'memory': random.uniform(30, 60),
+                'disk': random.uniform(20, 40),
+                'network': random.uniform(80, 100),  # High network for exfil
+                'processes': random.randint(150, 300)
+            }
+            
+            await self.send_agent_metrics(target_agent, metrics)
+            await asyncio.sleep(2)  # Simulate exfiltration time
+        
+        logger.info(f"✅ Data Exfiltration Attack completed on {target_agent}")
+        return attack_id
+
+    async def simulate_ransomware_attack(self, agent_id: str = None):
+        """Simulate ransomware attack"""
+        logger.info(f"🔒 Starting Ransomware Attack on agent {agent_id or 'random'}")
+        
+        agents = await self.get_agents()
+        if not agents:
+            logger.error("No agents available for ransomware simulation")
+            return
+        
+        target_agent = agent_id or random.choice(agents)['id']
+        attack_id = str(uuid.uuid4())
+        
+        # Create ransomware threat
+        await self.create_threat({
+            'name': f'Ransomware Infection - {target_agent}',
+            'type': 'ransomware',
+            'severity': 'critical',
+            'description': f'Ransomware infection detected on {target_agent}',
+            'agent_id': target_agent
+        })
+        
+        # Simulate ransomware encryption phases
+        encryption_phases = [
+            {'cpu': random.uniform(60, 80), 'memory': random.uniform(50, 70), 'disk_io': random.uniform(50, 80)},
+            {'cpu': random.uniform(80, 95), 'memory': random.uniform(70, 85), 'disk_io': random.uniform(70, 90)},
+            {'cpu': random.uniform(95, 100), 'memory': random.uniform(85, 95), 'disk_io': random.uniform(85, 95)}
+        ]
+        
+        for i, phase_metrics in enumerate(encryption_phases):
+            logger.info(f"🔒 Ransomware encryption phase {i+1} on {target_agent}")
+            
+            await self.create_evidence({
+                'agent_id': target_agent,
+                'type': 'ransomware',
+                'severity': 'critical',
+                'title': f'Ransomware Encryption Phase {i+1} - {target_agent}',
+                'description': f'Ransomware encryption phase {i+1} with high disk I/O detected',
+                'raw_data': {
+                    'attack_id': attack_id,
+                    'encryption_phase': i + 1,
+                    'files_encrypted': random.randint(1000, 5000),
+                    'ransom_note': f'PAY_{random.randint(100000, 999999)}.BTC',
+                    'attack_vector': 'phishing_email',
+                    'timestamp': datetime.now().isoformat()
+                },
+                'confidence': 0.99
+            })
+            
+            await self.send_agent_metrics(target_agent, phase_metrics)
+            await asyncio.sleep(4)  # Simulate encryption time
+        
+        # Final ransom note
+        await self.create_evidence({
+            'agent_id': target_agent,
+            'type': 'ransomware',
+            'severity': 'critical',
+            'title': f'Ransomware Demand - {target_agent}',
+            'description': f'Ransomware demand note left for {target_agent}',
+            'raw_data': {
+                'attack_id': attack_id,
+                'final_phase': 'complete',
+                'ransom_amount': random.randint(5, 50),  # BTC
+                'payment_deadline': (datetime.now() + timedelta(hours=48)).isoformat(),
+                'timestamp': datetime.now().isoformat()
+            },
+            'confidence': 1.0
+        })
+        
+        logger.info(f"✅ Ransomware Attack completed on {target_agent}")
+        return attack_id
         """
         Simulate lateral movement across multiple agents
         """
@@ -660,8 +906,7 @@ async def main():
             await simulator.simulate_lateral_movement_attack(args.duration)
         else:
             print(f"Unknown attack type: {args.attack_type}")
-            
-    except KeyboardInterrupt:
+            print(f"Available attack types: cpu, memory, network, process, file, multi, lateral, privilege, exfiltration, ransomware, test, sequence")
         logger.info("Attack simulator stopped by user")
     except Exception as e:
         logger.error(f"Attack simulator error: {e}")

@@ -108,7 +108,11 @@ class DIOAgent:
                 'disk': disk.percent,
                 'network': (network.bytes_sent + network.bytes_recv) / (1024 * 1024),  # MB
                 'processes': process_count,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                # Include agent container information for better event tracking
+                'hostname': self.hostname,
+                'ip_address': self.ip_address,
+                'os_type': self.os_type
             }
             
             # Create a new session for each request to avoid broken pipe issues
@@ -136,32 +140,72 @@ class DIOAgent:
         """Detect anomalies in system metrics"""
         anomalies = []
         
+        # Debug logging: Show current metrics for analysis
+        logger.info(f"🔍 [ANOMALY DETECTION] Agent {self.agent_id} analyzing metrics:")
+        logger.info(f"    - CPU Usage: {metrics['cpu']:.1f}% (threshold: {self.anomaly_threshold}%)")
+        logger.info(f"    - Memory Usage: {metrics['memory']:.1f}% (threshold: {self.anomaly_threshold}%)")
+        logger.info(f"    - Process Count: {metrics['processes']} (threshold: 300)")
+        logger.info(f"    - Disk Usage: {metrics['disk']:.1f}%")
+        logger.info(f"    - Network I/O: {metrics.get('network', 0):.1f} MB")
+        
         # High CPU usage
         if metrics['cpu'] > self.anomaly_threshold:
-            anomalies.append({
+            cpu_anomaly = {
                 'type': 'cpu_anomaly',
                 'severity': 'high' if metrics['cpu'] > 90 else 'medium',
                 'description': f"High CPU usage detected: {metrics['cpu']:.1f}%",
                 'confidence': min(1.0, metrics['cpu'] / 100)
-            })
+            }
+            anomalies.append(cpu_anomaly)
+            logger.info(f"🚨 [ANOMALY FOUND] CPU Anomaly: {cpu_anomaly['severity']} - {cpu_anomaly['description']}")
         
         # High memory usage
         if metrics['memory'] > self.anomaly_threshold:
-            anomalies.append({
+            memory_anomaly = {
                 'type': 'memory_anomaly',
                 'severity': 'high' if metrics['memory'] > 90 else 'medium',
                 'description': f"High memory usage detected: {metrics['memory']:.1f}%",
                 'confidence': min(1.0, metrics['memory'] / 100)
-            })
+            }
+            anomalies.append(memory_anomaly)
+            logger.info(f"🚨 [ANOMALY FOUND] Memory Anomaly: {memory_anomaly['severity']} - {memory_anomaly['description']}")
         
         # Unusual process count
         if metrics['processes'] > 300:
-            anomalies.append({
+            process_anomaly = {
                 'type': 'process_anomaly',
                 'severity': 'medium',
                 'description': f"Unusual process count: {metrics['processes']}",
                 'confidence': min(1.0, metrics['processes'] / 500)
-            })
+            }
+            anomalies.append(process_anomaly)
+            logger.info(f"🚨 [ANOMALY FOUND] Process Anomaly: {process_anomaly['severity']} - {process_anomaly['description']}")
+        
+        # Check for unusual network activity
+        network_usage = metrics.get('network', 0)
+        if network_usage > 100:  # High network I/O
+            network_anomaly = {
+                'type': 'network_anomaly',
+                'severity': 'medium',
+                'description': f"High network I/O detected: {network_usage:.1f} MB",
+                'confidence': min(1.0, network_usage / 200)
+            }
+            anomalies.append(network_anomaly)
+            logger.info(f"🚨 [ANOMALY FOUND] Network Anomaly: {network_anomaly['severity']} - {network_anomaly['description']}")
+        
+        # Check for high disk usage
+        if metrics['disk'] > 85:
+            disk_anomaly = {
+                'type': 'disk_anomaly',
+                'severity': 'high',
+                'description': f"High disk usage detected: {metrics['disk']:.1f}%",
+                'confidence': min(1.0, metrics['disk'] / 100)
+            }
+            anomalies.append(disk_anomaly)
+            logger.info(f"🚨 [ANOMALY FOUND] Disk Anomaly: {disk_anomaly['severity']} - {disk_anomaly['description']}")
+        
+        if not anomalies:
+            logger.info(f"✅ [ANOMALY DETECTION] No anomalies detected - All metrics within normal ranges")
         
         return anomalies
     
@@ -177,6 +221,15 @@ class DIOAgent:
                 'detected_at': datetime.now().isoformat()
             }
             
+            # Debug logging: Threat data being sent
+            logger.info(f"🚨 [THREAT DETECTION] Agent {self.agent_id} reporting threat:")
+            logger.info(f"    - Threat Type: {anomaly['type']}")
+            logger.info(f"    - Severity: {anomaly['severity']}")
+            logger.info(f"    - Description: {anomaly['description']}")
+            logger.info(f"    - Confidence: {anomaly['confidence']:.2f}")
+            logger.info(f"    - Sending to: {self.nerve_center_url}/threats")
+            logger.info(f"    - Full payload: {json.dumps(threat_data, indent=2)}")
+            
             async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
                 async with session.post(
                     f"{self.nerve_center_url}/threats",
@@ -184,13 +237,23 @@ class DIOAgent:
                 ) as response:
                     if response.status == 200:
                         self.threats_detected += 1
-                        logger.info(f"Threat reported: {anomaly['type']}")
+                        result = await response.json()
+                        logger.info(f"✅ [THREAT SUCCESS] Threat reported successfully:")
+                        logger.info(f"    - Threat ID: {result.get('threat_id', 'unknown')}")
+                        logger.info(f"    - Total threats detected by agent: {self.threats_detected}")
+                        logger.info(f"    - Server response: {json.dumps(result, indent=2)}")
                         return True
                     else:
-                        logger.error(f"Failed to report threat: {response.status}")
+                        error_text = await response.text()
+                        logger.error(f"❌ [THREAT FAILED] Failed to report threat:")
+                        logger.error(f"    - HTTP Status: {response.status}")
+                        logger.error(f"    - Error Response: {error_text}")
+                        logger.error(f"    - Threat Data: {json.dumps(threat_data, indent=2)}")
                         return False
         except Exception as e:
-            logger.error(f"Error reporting threat: {e}")
+            logger.error(f"❌ [THREAT ERROR] Error reporting threat:")
+            logger.error(f"    - Error: {str(e)}")
+            logger.error(f"    - Anomaly Data: {json.dumps(anomaly, indent=2)}")
             return False
     
     async def create_evidence(self, anomaly: Dict[str, Any], metrics: Dict[str, Any]) -> bool:
@@ -213,19 +276,40 @@ class DIOAgent:
                 'confidence': anomaly['confidence']
             }
             
+            # Debug logging: Evidence data being sent
+            logger.info(f"📋 [EVIDENCE CREATION] Agent {self.agent_id} creating evidence:")
+            logger.info(f"    - Evidence Type: {anomaly['type']}")
+            logger.info(f"    - Severity: {anomaly['severity']}")
+            logger.info(f"    - Title: {evidence_data['title']}")
+            logger.info(f"    - Description: {anomaly['description']}")
+            logger.info(f"    - Confidence: {anomaly['confidence']:.2f}")
+            logger.info(f"    - Current Metrics: CPU={metrics['cpu']:.1f}%, Memory={metrics['memory']:.1f}%, Processes={metrics['processes']}")
+            logger.info(f"    - Sending to: {self.nerve_center_url}/evidence")
+            logger.info(f"    - Full payload: {json.dumps(evidence_data, indent=2)}")
+            
             async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
                 async with session.post(
                     f"{self.nerve_center_url}/evidence",
                     json=evidence_data
                 ) as response:
                     if response.status == 200:
-                        logger.info(f"Evidence created: {anomaly['type']}")
+                        result = await response.json()
+                        logger.info(f"✅ [EVIDENCE SUCCESS] Evidence created successfully:")
+                        logger.info(f"    - Evidence ID: {result.get('evidence_id', 'unknown')}")
+                        logger.info(f"    - Server response: {json.dumps(result, indent=2)}")
                         return True
                     else:
-                        logger.error(f"Failed to create evidence: {response.status}")
+                        error_text = await response.text()
+                        logger.error(f"❌ [EVIDENCE FAILED] Failed to create evidence:")
+                        logger.error(f"    - HTTP Status: {response.status}")
+                        logger.error(f"    - Error Response: {error_text}")
+                        logger.error(f"    - Evidence Data: {json.dumps(evidence_data, indent=2)}")
                         return False
         except Exception as e:
-            logger.error(f"Error creating evidence: {e}")
+            logger.error(f"❌ [EVIDENCE ERROR] Error creating evidence:")
+            logger.error(f"    - Error: {str(e)}")
+            logger.error(f"    - Anomaly Data: {json.dumps(anomaly, indent=2)}")
+            logger.error(f"    - Metrics Data: {json.dumps(metrics, indent=2)}")
             return False
     
     async def monitor_system(self):
@@ -279,6 +363,12 @@ class DIOAgent:
                 
                 # Report threats and create evidence for anomalies
                 for anomaly in anomalies:
+                    logger.info(f"🎯 [ANOMALY PROCESSING] Agent {self.agent_id} processing anomaly:")
+                    logger.info(f"    - Anomaly Type: {anomaly['type']}")
+                    logger.info(f"    - Severity: {anomaly['severity']}")
+                    logger.info(f"    - Description: {anomaly['description']}")
+                    logger.info(f"    - Confidence: {anomaly['confidence']:.2f}")
+                    
                     await self.report_threat(anomaly)
                     await self.create_evidence(anomaly, metrics)
                 
