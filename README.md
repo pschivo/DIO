@@ -74,26 +74,14 @@ The DIO (Digital Immune Organism) platform is a distributed, containerized secur
 ```bash
 # Clone repository
 git clone <repository-url>
-cd dio-platform
+cd DIO
 
 # Start full production stack
-docker compose up -d
-
-# Initialize database (automatic on first start)
-docker compose exec frontend npm run db:push
+docker compose --profile production up -d && chmod +x agents.sh attack.sh quick-attack.sh
 
 # Access dashboard
 open http://localhost:3000
 ```
-
-### Development Environment
-
-```bash
-# Start with development tools
-docker compose --profile dev up -d
-
-# View logs in real-time
-docker compose logs -f
 
 # Check agent status
 ./agents.sh
